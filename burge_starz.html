@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Birge – Kártyajáték</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#1a1f2e;min-height:100vh;display:flex;align-items:center;justify-content:center;font-family:'Segoe UI',system-ui,sans-serif;color:#e8e0d0;}
+#game{width:100%;max-width:800px;padding:1.2rem;}
+h1{font-size:22px;font-weight:600;letter-spacing:1px;color:#f0e8d0;text-align:center;margin-bottom:1rem;}
+.scores{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;justify-content:center;}
+.chip{font-size:12px;color:#a0988a;background:#252b3a;border-radius:6px;padding:3px 11px;border:0.5px solid #3a4255;}
+.chip.adu{color:#EF9F27;border-color:#7a5010;}
+.area-label{font-size:11px;color:#7a8099;margin-bottom:5px;text-transform:uppercase;letter-spacing:0.5px;}
+.hand{display:flex;flex-wrap:wrap;gap:6px;min-height:100px;padding:8px;background:#252b3a;border-radius:10px;border:0.5px solid #3a4255;}
+
+/* Card base */
+.card{width:62px;height:90px;border-radius:7px;border:1.5px solid #aaa;background:#fff;cursor:pointer;user-select:none;position:relative;transition:transform 0.12s;overflow:hidden;flex-shrink:0;}
+.card:hover{transform:translateY(-8px);}
+.card.selected{transform:translateY(-14px);outline:2.5px solid #378ADD;outline-offset:1px;}
+.card.trump-hand{border:2.5px solid #EF9F27;}
+.card.trump-hand::after{content:'★';position:absolute;top:2px;right:3px;font-size:10px;color:#EF9F27;text-shadow:0 0 3px #000;z-index:2;pointer-events:none;}
+.card.cpu-back{background:#1a4a7a;cursor:default;border-color:#0e3a6a;}
+.card.cpu-back:hover{transform:none;}
+.card.beat-card{border-color:#22cc55;border-width:2.5px;}
+@keyframes fadeout{0%{opacity:1;transform:scale(1);}80%{opacity:1;transform:scale(1.06);}100%{opacity:0;transform:scale(0.88);}}
+.card.fading{animation:fadeout 0.42s ease forwards;}
+
+/* Image card */
+.card img{width:100%;height:100%;object-fit:cover;display:block;border-radius:6px;pointer-events:none;}
+
+/* Text card (french mode) */
+.card.text-card{display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:13px;font-weight:700;}
+.card.text-card.red-suit{color:#D85A30;}
+.card.text-card.black-suit{color:#1a1a1a;}
+.card.text-card .tsuit{font-size:22px;line-height:1.2;}
+.card.text-card .tval{font-size:13px;}
+
+.table-area{display:flex;gap:12px;align-items:flex-start;margin:10px 0;min-height:110px;padding:10px;background:#252b3a;border-radius:10px;border:0.5px solid #3a4255;}
+.table-sent{flex:1;display:flex;flex-direction:column;gap:6px;}
+.table-sent-label{font-size:11px;color:#7a8099;text-transform:uppercase;letter-spacing:0.5px;}
+.table-area-inner{display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap;min-height:90px;}
+.table-pile{display:flex;flex-direction:column;align-items:center;gap:4px;}
+.pile-label{font-size:10px;color:#7a8099;}
+.table-cards-row{display:flex;flex-wrap:wrap;gap:4px;}
+.vs-sep{font-size:20px;color:#5a6280;align-self:center;padding-bottom:10px;}
+.side-info{display:flex;flex-direction:column;align-items:center;gap:6px;}
+.talon-back{width:62px;height:90px;border-radius:7px;border:1.5px solid #0e3a6a;background:#1a4a7a;display:flex;align-items:center;justify-content:center;color:#7aaced;font-size:14px;font-weight:600;}
+.adu-wrap{position:relative;width:62px;}
+.adu-wrap .card{border:2.5px solid #EF9F27;cursor:default;}
+.adu-wrap .card:hover{transform:none;}
+.adu-label{font-size:9px;color:#EF9F27;font-weight:600;letter-spacing:0.5px;text-align:center;margin-bottom:3px;}
+
+.controls{display:flex;gap:7px;flex-wrap:wrap;margin:8px 0;align-items:center;}
+button{padding:6px 14px;border:0.5px solid #4a5270;border-radius:7px;background:transparent;cursor:pointer;font-size:13px;color:#c8c0b0;}
+button:hover{background:#2e3550;}
+button:disabled{opacity:0.28;cursor:not-allowed;}
+button.primary{background:#1a5a9a;color:#d0e8ff;border-color:#2a7acc;}
+button.primary:hover{background:#1e6ab0;}
+.toggles{display:flex;gap:12px;margin-left:auto;align-items:center;flex-wrap:wrap;}
+.toggle-wrap{display:flex;align-items:center;gap:6px;}
+.toggle-label{font-size:12px;color:#8890aa;}
+.toggle{position:relative;width:40px;height:22px;cursor:pointer;display:inline-block;}
+.toggle input{opacity:0;width:0;height:0;position:absolute;}
+.toggle-slider{position:absolute;inset:0;background:#3a4255;border-radius:11px;transition:background 0.2s;}
+.toggle-slider::before{content:'';position:absolute;width:16px;height:16px;left:3px;top:3px;background:#8890aa;border-radius:50%;transition:transform 0.2s,background 0.2s;}
+.toggle input:checked+.toggle-slider{background:#1a5a9a;}
+.toggle input:checked+.toggle-slider::before{transform:translateX(18px);background:#d0e8ff;}
+
+#status{font-size:14px;font-weight:500;color:#d0c8b8;margin:6px 0 3px;min-height:20px;}
+#log{font-size:12px;color:#7a8099;background:#252b3a;border-radius:7px;padding:7px 11px;max-height:74px;overflow-y:auto;border:0.5px solid #3a4255;margin-top:6px;}
+#log div{padding:1px 0;}
+#log div:first-child{color:#c8c0b0;}
+#gameover-msg{margin:6px 0;}
+.gameover{text-align:center;font-size:18px;font-weight:700;padding:8px 12px;border-radius:8px;}
+.gameover.win{color:#22cc66;background:#0a2a14;border:1px solid #22aa44;}
+.gameover.lose{color:#cc4422;background:#2a0a0a;border:1px solid #aa2222;}
+</style>
+</head>
+<body>
+<div id="game">
+  <h1>Bürgestarz.com</h1>
+  <div class="scores">
+    <span class="chip" id="chip-p">Te: 5 lap</span>
+    <span class="chip" id="chip-c">CPU: 5 lap</span>
+    <span class="chip" id="chip-t">Talon: ?</span>
+    <span class="chip adu" id="chip-trump">Adu: ?</span>
+  </div>
+  <div class="area-label">CPU keze</div>
+  <div class="hand" id="cpu-hand"></div>
+  <div class="table-area">
+    <div class="table-sent">
+      <div class="table-sent-label" id="table-label">Asztal</div>
+      <div class="table-area-inner" id="table-inner"></div>
+    </div>
+    <div class="side-info">
+      <div class="talon-back" id="talon-el">—</div>
+      <div class="adu-wrap" id="adu-wrap" style="display:none;">
+        <div class="adu-label">ADU</div>
+        <div class="card" id="adu-card"></div>
+      </div>
+    </div>
+  </div>
+  <div class="area-label">A te kezed</div>
+  <div class="hand" id="player-hand"></div>
+  <div id="status"></div>
+  <div id="gameover-msg"></div>
+  <div class="controls">
+    <button id="btn-send" class="primary" onclick="playerSend()">Küldés</button>
+    <button id="btn-beat" class="primary" onclick="playerBeat()">Ütés</button>
+    <button id="btn-take" onclick="playerTake()">Felvétel</button>
+    <button onclick="initGame()">Új játék</button>
+    <div class="toggles">
+      <div class="toggle-wrap">
+        <span class="toggle-label">Dupla pakli</span>
+        <label class="toggle">
+          <input type="checkbox" id="double-deck" onchange="initGame()">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="toggle-wrap">
+        <span class="toggle-label">Francia kártya</span>
+        <label class="toggle">
+          <input type="checkbox" id="french-mode" onchange="initGame()">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+  </div>
+  <div id="log"></div>
+</div>
+
+<script>
+// === Magyar kártya ===
+const HU_SUITS=['piros','tok','makk','zold'];
+const HU_VALS=['7','8','9','10','also','felso','kiraly','asz'];
+const HU_DISPLAY={'7':'VII','8':'VIII','9':'IX','10':'X','also':'A','felso':'F','kiraly':'K','asz':'Á'};
+const HU_SUIT_HU={'piros':'piros','tok':'tök','makk':'makk','zold':'zöld'};
+
+// === Francia kártya ===
+const FR_SUITS=['kor','karo','treff','pikk'];
+const FR_VALS=['7','8','9','10','also','felso','kiraly','asz'];
+const FR_DISPLAY={'7':'7','8':'8','9':'9','10':'10','also':'J','felso':'Q','kiraly':'K','asz':'A'};
+const FR_SUIT_SYM={'kor':'♥','karo':'♦','treff':'♣','pikk':'♠'};
+const FR_SUIT_HU={'kor':'kör','karo':'káró','treff':'treff','pikk':'pikk'};
+const FR_RED=new Set(['kor','karo']);
+
+const VR={'7':0,'8':1,'9':2,'10':3,'also':4,'felso':5,'kiraly':6,'asz':7};
+
+let G={}, logs=[];
+
+function isFrench(){return document.getElementById('french-mode').checked;}
+function isDouble(){return document.getElementById('double-deck').checked;}
+
+function suits(){return isFrench()?FR_SUITS:HU_SUITS;}
+function vals(){return HU_VALS;} // same order
+function suitHU(s){return isFrench()?FR_SUIT_HU[s]:HU_SUIT_HU[s];}
+function valHU(v){return isFrench()?FR_DISPLAY[v]:HU_DISPLAY[v];}
+
+function imgPath(s,v){
+  if(isFrench())return null;
+  return s+'_'+v+'.jpg';
+}
+
+function addLog(msg){logs.unshift(msg);if(logs.length>50)logs.pop();}
+
+function buildDeck(){
+  let ss=suits(), vs=vals(), d=[];
+  for(let s of ss)for(let v of vs)d.push({s,v,id:s+'_'+v+'_1'});
+  if(isDouble())for(let s of ss)for(let v of vs)d.push({s,v,id:s+'_'+v+'_2'});
+  return d;
+}
+function shuffle(a){for(let i=a.length-1;i>0;i--){let j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+
+function beats(att,def,ts){
+  if(att.s===ts&&def.s!==ts)return true;
+  if(att.s===def.s)return VR[att.v]>VR[def.v];
+  return false;
+}
+
+function canBeatWith(selected,table,ts){
+  if(selected.length!==table.length)return false;
+  let rem=[...table];
+  for(let att of selected){
+    let idx=rem.findIndex(def=>beats(att,def,ts));
+    if(idx<0)return false;
+    rem.splice(idx,1);
+  }
+  return true;
+}
+
+function cpuFindBeat(hand,cards,ts){
+  let avail=[...hand],used=[];
+  for(let c of cards){
+    let opts=avail.filter(h=>beats(h,c,ts));
+    if(opts.length===0)return null;
+    opts.sort((a,b)=>{
+      let aT=a.s===ts&&c.s!==ts,bT=b.s===ts&&c.s!==ts;
+      if(aT!==bT)return aT?1:-1;
+      return VR[a.v]-VR[b.v];
+    });
+    let pick=opts[0];
+    used.push(pick);
+    avail=avail.filter(x=>x.id!==pick.id);
+  }
+  return used;
+}
+
+function initGame(){
+  logs=[];
+  let deck=shuffle(buildDeck());
+  let trump=deck.pop();
+  G={
+    ph:deck.splice(0,5),ch:deck.splice(0,5),
+    talon:deck,trump,ts:trump.s,
+    table:[],beatCards:[],
+    sel:[],phase:'player-send',over:false,animating:false
+  };
+  document.getElementById('gameover-msg').innerHTML='';
+  addLog('Új játék!'+(isDouble()?' Dupla pakli.':'')+' Te kezdesz.');
+  render();
+}
+
+// BUG FIX: kulcs csak c.v (érték), nem c.s+c.v
+function getValidSends(hand,maxCount){
+  let res=[];
+  if(maxCount>=1)for(let c of hand)res.push([c]);
+  if(maxCount>=3){
+    let grp={};
+    for(let c of hand){if(!grp[c.v])grp[c.v]=[];grp[c.v].push(c);}
+    for(let v in grp)if(grp[v].length>=2){
+      let p=grp[v].slice(0,2);
+      for(let comp of hand.filter(c=>!p.some(x=>x.id===c.id)))res.push([...p,comp]);
+    }
+  }
+  if(maxCount>=5){
+    let grp={};
+    for(let c of hand){if(!grp[c.v])grp[c.v]=[];grp[c.v].push(c);}
+    let pvs=Object.keys(grp).filter(v=>grp[v].length>=2);
+    for(let i=0;i<pvs.length;i++)for(let j=i+1;j<pvs.length;j++){
+      let p1=grp[pvs[i]].slice(0,2),p2=grp[pvs[j]].slice(0,2);
+      let used=[...p1,...p2];
+      for(let c of hand.filter(x=>!used.some(u=>u.id===x.id)))res.push([...p1,...p2,c]);
+    }
+  }
+  return res;
+}
+
+function fillHand(hand){
+  while(hand.length<5&&G.talon.length>0)hand.push(G.talon.pop());
+  if(hand.length<5&&G.trump){hand.push(G.trump);G.trump=null;}
+}
+
+function checkWin(){
+  let noMore=G.talon.length===0&&!G.trump&&G.table.length===0;
+  if(noMore&&G.ph.length===0){
+    G.over=true;G.phase='over';
+    addLog('*** NYERTÉL! ***');
+    document.getElementById('status').textContent='';
+    document.getElementById('gameover-msg').innerHTML='<div class="gameover win">NYERTÉL! Gratulálok!</div>';
+    render();return true;
+  }
+  if(noMore&&G.ch.length===0){
+    G.over=true;G.phase='over';
+    addLog('*** CPU nyert – te vagy a BIRGE! ***');
+    document.getElementById('status').textContent='';
+    document.getElementById('gameover-msg').innerHTML='<div class="gameover lose">CPU nyert – te vagy a BIRGE!</div>';
+    render();return true;
+  }
+  return false;
+}
+
+function showBeatAnimation(beatCards,afterFn){
+  G.beatCards=beatCards;G.animating=true;render();
+  setTimeout(()=>{
+    document.querySelectorAll('.beat-card').forEach(el=>el.classList.add('fading'));
+    setTimeout(()=>{G.beatCards=[];G.animating=false;afterFn();},450);
+  },1400);
+}
+
+function playerSend(){
+  if(G.phase!=='player-send'||G.animating)return;
+  if(G.sel.length===0){addLog('Válassz lapot(okat)!');render();return;}
+  let valid=getValidSends(G.ph,G.ch.length);
+  let ok=valid.some(combo=>combo.length===G.sel.length&&G.sel.every(id=>combo.some(c=>c.id===id)));
+  if(!ok){addLog('Érvénytelen küldés! (párok szabálya vagy CPU lapszám)');render();return;}
+  G.table=G.sel.map(id=>G.ph.find(c=>c.id===id));
+  G.ph=G.ph.filter(c=>!G.sel.includes(c.id));
+  G.sel=[];
+  addLog('Küldtél: '+G.table.map(c=>suitHU(c.s)+' '+valHU(c.v)).join(', '));
+  if(checkWin())return;
+  G.phase='cpu-beat';render();
+  setTimeout(cpuBeatTurn,900);
+}
+
+function cpuBeatTurn(){
+  let beat=cpuFindBeat(G.ch,G.table,G.ts);
+  let shouldBeat=true;
+  if(!beat){shouldBeat=false;}
+  else{
+    let sentStr=G.table.reduce((s,c)=>s+VR[c.v]+(c.s===G.ts?10:0),0);
+    let beatStr=beat.reduce((s,c)=>s+VR[c.v]+(c.s===G.ts?10:0),0);
+    let trumpUsed=beat.filter(c=>c.s===G.ts).length;
+    if(trumpUsed>0&&G.table.every(c=>c.s!==G.ts)&&sentStr<3)shouldBeat=false;
+    if(beatStr>sentStr*3&&G.ch.length<=4)shouldBeat=false;
+  }
+  if(shouldBeat&&beat){
+    G.ch=G.ch.filter(c=>!beat.some(b=>b.id===c.id));
+    addLog('CPU leüt: '+beat.map(c=>suitHU(c.s)+' '+valHU(c.v)).join(', '));
+    showBeatAnimation(beat,()=>{
+      G.table=[];if(checkWin())return;
+      fillHand(G.ch);fillHand(G.ph);
+      G.phase='cpu-send';render();
+      setTimeout(cpuSendTurn,700);
+    });
+  } else {
+    addLog('CPU felveszi ('+G.table.length+' lap)');
+    G.ch=[...G.ch,...G.table];G.table=[];
+    fillHand(G.ch);fillHand(G.ph);
+    G.phase='player-send';addLog('Te küldesz újra!');render();
+  }
+}
+
+function cpuSendTurn(){
+  let valid=getValidSends(G.ch,G.ph.length);
+  if(valid.length===0){addLog('CPU nem tud küldeni.');G.phase='player-send';render();return;}
+  valid.sort((a,b)=>{
+    let sa=a.reduce((s,c)=>s+VR[c.v]+(c.s===G.ts?20:0),0);
+    let sb=b.reduce((s,c)=>s+VR[c.v]+(c.s===G.ts?20:0),0);
+    return sa-sb;
+  });
+  let toSend=valid[0];
+  G.ch=G.ch.filter(c=>!toSend.some(s=>s.id===c.id));
+  G.table=toSend;
+  addLog('CPU küld: '+toSend.map(c=>suitHU(c.s)+' '+valHU(c.v)).join(', '));
+  if(checkWin())return;
+  G.phase='player-beat';render();
+}
+
+function playerBeat(){
+  if(G.phase!=='player-beat'||G.animating)return;
+  if(G.sel.length!==G.table.length){addLog('Válassz pontosan '+G.table.length+' lapot!');render();return;}
+  let selCards=G.sel.map(id=>G.ph.find(c=>c.id===id));
+  if(!canBeatWith(selCards,G.table,G.ts)){addLog('Ezekkel nem tudod leütni!');render();return;}
+  G.ph=G.ph.filter(c=>!G.sel.includes(c.id));
+  addLog('Leütötted: '+selCards.map(c=>suitHU(c.s)+' '+valHU(c.v)).join(', '));
+  G.sel=[];
+  showBeatAnimation(selCards,()=>{
+    G.table=[];if(checkWin())return;
+    fillHand(G.ph);fillHand(G.ch);
+    G.phase='player-send';addLog('Te küldesz!');render();
+  });
+}
+
+function playerTake(){
+  if(G.phase!=='player-beat'||G.animating)return;
+  addLog('Felvetted: '+G.table.map(c=>suitHU(c.s)+' '+valHU(c.v)).join(', '));
+  G.ph=[...G.ph,...G.table];G.sel=[];G.table=[];
+  fillHand(G.ph);fillHand(G.ch);
+  G.phase='cpu-send';render();
+  setTimeout(cpuSendTurn,700);
+}
+
+function toggleSel(id){
+  if(G.animating)return;
+  let i=G.sel.indexOf(id);
+  if(i>=0)G.sel.splice(i,1);else G.sel.push(id);
+  render();
+}
+
+function mkCard(c,clickable,selected,isTrump,hidden,isBeat){
+  let cls=['card'];
+  if(hidden){cls.push('cpu-back');}
+  else if(isFrench()){
+    cls.push('text-card');
+    cls.push(FR_RED.has(c.s)?'red-suit':'black-suit');
+  }
+  if(selected)cls.push('selected');
+  if(isTrump&&!hidden)cls.push('trump-hand');
+  if(isBeat)cls.push('beat-card');
+  let oc=clickable?`onclick="toggleSel('${c.id}')"` :'';
+
+  let inner='';
+  if(!hidden){
+    if(isFrench()){
+      inner=`<span class="tsuit">${FR_SUIT_SYM[c.s]}</span><span class="tval">${FR_DISPLAY[c.v]}</span>`;
+    } else {
+      inner=`<img src="${imgPath(c.s,c.v)}" alt="${suitHU(c.s)} ${valHU(c.v)}" draggable="false">`;
+    }
+  }
+  return`<div class="${cls.join(' ')}" ${oc}>${inner}</div>`;
+}
+
+function mkAduCard(c){
+  if(!c)return;
+  let aduCard=document.getElementById('adu-card');
+  if(isFrench()){
+    aduCard.className='card text-card '+(FR_RED.has(c.s)?'red-suit':'black-suit');
+    aduCard.innerHTML=`<span class="tsuit">${FR_SUIT_SYM[c.s]}</span><span class="tval">${FR_DISPLAY[c.v]}</span>`;
+  } else {
+    aduCard.className='card';
+    aduCard.innerHTML=`<img src="${imgPath(c.s,c.v)}" alt="adu" draggable="false">`;
+  }
+}
+
+function render(){
+  document.getElementById('chip-p').textContent='Te: '+G.ph.length+' lap';
+  document.getElementById('chip-c').textContent='CPU: '+G.ch.length+' lap';
+  document.getElementById('chip-t').textContent='Talon: '+G.talon.length;
+  document.getElementById('chip-trump').textContent='Adu: '+(G.ts?suitHU(G.ts):'—');
+
+  document.getElementById('cpu-hand').innerHTML=G.ch.map(()=>'<div class="card cpu-back"></div>').join('');
+
+  let clickable=(G.phase==='player-send'||G.phase==='player-beat')&&!G.animating;
+  document.getElementById('player-hand').innerHTML=G.ph.map(c=>mkCard(c,clickable,G.sel.includes(c.id),c.s===G.ts,false,false)).join('');
+
+  let html='';
+  if(G.table.length>0)html+=`<div class="table-pile"><div class="pile-label">Küldött</div><div class="table-cards-row">${G.table.map(c=>mkCard(c,false,false,c.s===G.ts,false,false)).join('')}</div></div>`;
+  if(G.beatCards&&G.beatCards.length>0)html+=`<div class="vs-sep">→</div><div class="table-pile"><div class="pile-label">Ütés</div><div class="table-cards-row">${G.beatCards.map(c=>mkCard(c,false,false,c.s===G.ts,false,true)).join('')}</div></div>`;
+  document.getElementById('table-inner').innerHTML=html;
+
+  const lbl={'player-send':'Te küldesz','player-beat':'CPU küldött – válassz '+G.table.length+' ütőlapot, vagy vedd fel','cpu-beat':'CPU gondolkodik...','cpu-send':'CPU küld...','over':'Játék vége'};
+  document.getElementById('table-label').textContent=lbl[G.phase]||'Asztal';
+
+  let aduWrap=document.getElementById('adu-wrap');
+  if(G.trump){
+    aduWrap.style.display='block';
+    mkAduCard(G.trump);
+  } else {
+    aduWrap.style.display='none';
+  }
+  document.getElementById('talon-el').textContent=G.talon.length>0?G.talon.length:'—';
+
+  if(!G.over){
+    const st={'player-send':'Válassz lapot(okat) és kattints Küldés-re!','player-beat':'Válassz '+G.table.length+' ütőlapot → Ütés, vagy Felvétel!','cpu-beat':'CPU dönt...','cpu-send':'CPU küld...'};
+    document.getElementById('status').textContent=st[G.phase]||'';
+  }
+
+  document.getElementById('btn-send').disabled=G.phase!=='player-send'||G.animating;
+  document.getElementById('btn-beat').disabled=G.phase!=='player-beat'||G.animating;
+  document.getElementById('btn-take').disabled=G.phase!=='player-beat'||G.animating;
+  document.getElementById('log').innerHTML=logs.slice(0,12).map(l=>`<div>${l}</div>`).join('');
+}
+
+initGame();
+</script>
+</body>
+</html>
